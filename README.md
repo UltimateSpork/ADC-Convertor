@@ -1,1 +1,1 @@
-# ECE2071-Project
+# Simple Analog to Digital Converter
