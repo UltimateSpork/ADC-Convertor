@@ -1,6 +1,6 @@
 # Simple Analog to Digital Converter
 
-#Instructions:
+Instructions:
 - Compile C program.
 - Ensure Slave STM 32 is connected.
 - Check port of STM 32
