@@ -2,7 +2,7 @@
 #include <stdint.h>
 #include <stdio.h>
 #include <string.h>
-
+#include <stdlib.h>
 struct wav_header{
 	char riff[4]; // RIFF
 	int32_t fileLength; // LENGTH IN BYTES
@@ -17,7 +17,7 @@ struct wav_header{
 	int16_t bitsPerSamp; // 16 in this case
 	char data[4]; // Just the word 'data'
 	int32_t dataLength; // Data length fileLength - 44
-};
+}__attribute__((packed));
 
 
 struct wav_header fileHeader;
@@ -25,51 +25,61 @@ struct wav_header fileHeader;
 int bufferSize = 64000;
 
 int sampleRate = 6400;
-int length = 16;
+int length = 8;
 
 int headerLength = sizeof(struct wav_header);
+
 
 void main(){
 
 	// Creating the header
 
+	
+	FILE *fptr = fopen("output.wav","wb");
+	FILE *raw = fopen("raw_ADC_values.data","rb");
+    fseek(raw, 0L, SEEK_END);
+    long rawFileSize = ftell(raw);
+    fseek(raw, 0L, SEEK_SET); 
+    uint32_t dataLength = rawFileSize;
+
 	strncpy(fileHeader.riff,"RIFF",4);
 	strncpy(fileHeader.wave,"WAVE",4);
 	strncpy(fileHeader.fmt,"fmt ",4);
-	strncpy(fileHeader.data,"data",4);
 	fileHeader.chunkSize = 16;
 	fileHeader.format = 1;
 	fileHeader.channels = 1;
 	fileHeader.srate = sampleRate;
-	fileHeader.bitsPerSamp = 16;
 	fileHeader.bytesPerSec = (fileHeader.srate * fileHeader.bitsPerSamp * fileHeader.channels)/8;
 	fileHeader.bytesPerSamp = 2;
-	fileHeader.dataLength = bufferSize * fileHeader.bytesPerSamp; 
+	fileHeader.bitsPerSamp = 16;
+	strncpy(fileHeader.data,"data",4);
+	fileHeader.dataLength = dataLength;
 	fileHeader.fileLength = fileHeader.dataLength + headerLength;
-	
-	FILE *fptr = fopen("output.wav","w");
-	FILE *raw = fopen("raw_ADC_values.data","r");
-	fwrite(&fileHeader,1,headerLength,fptr);
 
- 	// Scaling ADC output to be within the range of a 16 bit integer 
-	uint8_t adcBytes[2];
-	int16_t pcmVal;
-	uint32_t sampleCount = 0;
-	while (fread(adcBytes,1,2,raw) == 2){
 
-		uint16_t adcVal = adcBytes[0] | (adcBytes[1] << 8);
-		if (adcVal > 4095){
-			adcVal = 4095;
-		}
-		
-		pcmVal = (int16_t)(((int32_t)adcVal - 2048) * (32767.0 / 2048.0));
-		fwrite(&pcmVal,2,1,fptr);
-		sampleCount++; 
-	}	
+	fwrite(&fileHeader,sizeof(struct wav_header),1,fptr);
+
+
+    uint16_t* adc_data = (uint16_t*)malloc(dataLength);
+    int16_t* adc_scaled = (int16_t*)malloc(dataLength);
+
+
+fread(adc_data, 1, dataLength, raw);
+
+	for (int i = 0; i < dataLength / 2; i++) {
+		int32_t sample = ((int32_t)adc_data[i] * 65535 / 4095) - 32768;
+
+		// Clamp the values to a 16-bit signed range
+		if (sample > 32767) sample = 32767;
+		else if (sample < -32768) sample = -32768;
+
+		adc_scaled[i] = (int16_t)sample;
+	}
+    // Write the binary data
+    fwrite(adc_scaled, 1, dataLength, fptr);
+
 fclose(raw);
 fclose(fptr);
-
-printf("File Created\n");
 
 }
 
